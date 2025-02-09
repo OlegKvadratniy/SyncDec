@@ -1,7 +1,10 @@
 import sys
+import time  # Добавлен импорт модуля time
 from PyQt5 import QtWidgets
 from gui import ModeSelectionWindow, ServerWindow, ClientWindow
 from network import Server, Client
+import pyautogui
+import threading
 
 
 class App(QtWidgets.QApplication):
@@ -45,6 +48,8 @@ class App(QtWidgets.QApplication):
         self.mode_selection_window.close()
         self.client_window.show()
 
+        self.start_sending_cursor_position()
+
     def manual_connect_to_server(self):
         ip = self.client_window.ip_input.text()
         if ip:
@@ -52,7 +57,6 @@ class App(QtWidgets.QApplication):
 
     def on_client_connected(self, client_socket):
         self.server_window.info_label.setText("Клиент подключен.")
-        # Здесь можно отправить данные клиенту
         self.server.send_data("Привет от сервера!")
 
     def on_server_message_received(self, message):
@@ -60,7 +64,6 @@ class App(QtWidgets.QApplication):
 
     def on_client_connected_to_server(self):
         self.client_window.info_label.setText("Подключено к серверу.")
-        # Здесь можно отправить данные серверу
         self.client.send_data("Привет от клиента!")
 
     def on_client_message_received(self, message):
@@ -68,6 +71,15 @@ class App(QtWidgets.QApplication):
 
     def on_client_error(self, error_message):
         self.client_window.info_label.setText(f"Ошибка: {error_message}")
+
+    def start_sending_cursor_position(self):
+        def send_cursor_position():
+            while True:
+                x, y = pyautogui.position()
+                self.client.send_data(x, y)
+                time.sleep(0.1)
+
+        threading.Thread(target=send_cursor_position, daemon=True).start()
 
 
 if __name__ == "__main__":

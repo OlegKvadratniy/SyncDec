@@ -42,18 +42,3 @@ class ClientWindow(QtWidgets.QWidget):
         self.setGeometry(100, 100, 300, 200)
 
         layout = QtWidgets.QVBoxLayout()
-
-        self.info_label = QtWidgets.QLabel("Поиск сервера...")
-        layout.addWidget(self.info_label)
-
-        self.ip_input = QtWidgets.QLineEdit()
-        self.ip_input.setPlaceholderText("Введите IP-адрес сервера")
-        layout.addWidget(self.ip_input)
-
-        self.connect_button = QtWidgets.QPushButton("Подключиться")
-        layout.addWidget(self.connect_button)
-
-        self.status_label = QtWidgets.QLabel("")
-        layout.addWidget(self.status_label)
-
-        self.setLayout(layout)
