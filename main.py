@@ -1,5 +1,5 @@
 import sys
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets
 from gui import ModeSelectionWindow, ServerWindow, ClientWindow
 from network import Server, Client
 

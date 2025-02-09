@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QObject, pyqtSignal, QByteArray
-from PyQt5.QtNetwork import QTcpServer, QTcpSocket, QHostAddress
+from PyQt5.QtNetwork import QTcpServer, QTcpSocket, QHostAddress, QAbstractSocket
 import threading
 import socket
 import time
@@ -13,6 +13,7 @@ class Server(QObject):
         super().__init__()
         self.server = QTcpServer()
         self.server.newConnection.connect(self.handle_new_connection)
+        self.client_socket = None  # Инициализируем здесь
 
         # Параметры для широковещательной рассылки
         self.broadcast_port = 37020  # Произвольный порт для broadcast
@@ -33,7 +34,9 @@ class Server(QObject):
         udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         message = f"{self.broadcast_message}:{port}"
-        broadcast_address = "192.168.1.255"  # Замените на ваш широковещательный адрес
+        broadcast_address = (
+            "255.255.255.255"  # Используем общий широковещательный адрес
+        )
         while True:
             udp_sock.sendto(
                 message.encode("utf-8"), (broadcast_address, self.broadcast_port)
@@ -71,6 +74,7 @@ class Client(QObject):
         self.socket.connected.connect(self.on_connected)
         self.socket.readyRead.connect(self.read_data)
         self.socket.errorOccurred.connect(self.on_error)
+        self.is_connecting = False  # Флаг состояния подключения
 
         # Параметры для прослушивания широковещательных сообщений
         self.broadcast_port = 37020  # Тот же порт, что и у сервера
@@ -102,9 +106,15 @@ class Client(QObject):
                 break  # Останавливаем прослушивание после подключения
 
     def connect_to_server(self, ip, port=8765):
-        self.socket.connectToHost(ip, port)
+        if (
+            not self.is_connecting
+            and self.socket.state() != QAbstractSocket.ConnectedState
+        ):
+            self.is_connecting = True
+            self.socket.connectToHost(ip, port)
 
     def on_connected(self):
+        self.is_connecting = False
         self.connected.emit()
         print("Подключено к серверу")
 
@@ -121,6 +131,7 @@ class Client(QObject):
         print(f"Отправлено сообщение: {message}")
 
     def on_error(self, socket_error):
+        self.is_connecting = False
         error_message = self.socket.errorString()
         self.error_occurred.emit(error_message)
         print(f"Ошибка сокета: {error_message}")
