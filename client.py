@@ -22,7 +22,7 @@ def discover_servers(udp_port=50000, timeout=3):
     udp_socket.settimeout(timeout)
 
     message = "DISCOVER_REQUEST"
-    broadcast_address = ("192.168.1.8", udp_port)
+    broadcast_address = ("192.168.1.255", udp_port)
 
     try:
         udp_socket.sendto(message.encode("utf-8"), broadcast_address)
