@@ -1,103 +1,126 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Клиент:
-1. Отправляет UDP broadcast с запросом обнаружения серверов.
-2. Собирает ответы и выводит список найденных серверов.
-3. После выбора сервера устанавливает TCP-соединение для обмена сообщениями.
+Клиент с автоопределением сети:
+- Автоматически находит все локальные сети
+- Отправляет broadcast во все активные интерфейсы
+- Не требует ручного ввода IP-адресов
 """
 
 import socket
 import time
+import netifaces
+
+
+def get_local_broadcasts():
+    broadcasts = []
+    for interface in netifaces.interfaces():
+        try:
+            # Пропускаем только явно ненужные интерфейсы
+            if interface.startswith(("lo", "tun")):  # только loopback и VPN
+                continue
+
+            addrs = netifaces.ifaddresses(interface).get(netifaces.AF_INET, [])
+            for addr in addrs:
+                if "broadcast" in addr:
+                    # Проверяем, что интерфейс активен (имеет IP)
+                    if addr.get("addr") not in ("127.0.0.1", "0.0.0.0"):
+                        broadcasts.append(addr["broadcast"])
+
+        except (ValueError, KeyError):
+            continue
+
+    return broadcasts or ["255.255.255.255"]  # универсальный fallback
 
 
 def discover_servers(udp_port=50000, timeout=3):
-    """
-    Отправляет UDP broadcast с запросом "DISCOVER_REQUEST" и ожидает ответов.
-    Формат ответа: "SERVER_RESPONSE;{server_name};{tcp_port}"
-    Возвращает список кортежей (server_name, server_ip, tcp_port).
-    """
+    """Обновленная версия с автоопределением сети"""
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     udp_socket.settimeout(timeout)
 
     message = "DISCOVER_REQUEST"
-    broadcast_address = ("192.168.1.255", udp_port)
-
-    try:
-        udp_socket.sendto(message.encode("utf-8"), broadcast_address)
-    except Exception as e:
-        print(f"[UDP] Ошибка отправки broadcast: {e}")
-        return []
-
     servers = []
+
+    # Получаем все актуальные broadcast-адреса
+    broadcast_targets = get_local_broadcasts()
+    print(f"🔎 Сканирую сети: {', '.join(broadcast_targets)}")
+
+    # Отправляем запросы на все найденные адреса
+    for target in broadcast_targets:
+        try:
+            udp_socket.sendto(message.encode(), (target, udp_port))
+        except Exception as e:
+            print(f"⚠️ Ошибка отправки на {target}: {e}")
+
+    # Сбор ответов
     start_time = time.time()
-    print("Ожидаем ответы от серверов...")
-    while True:
+    while time.time() - start_time < timeout:
         try:
             data, addr = udp_socket.recvfrom(1024)
-            message = data.decode("utf-8")
+            message = data.decode().strip()
             if message.startswith("SERVER_RESPONSE;"):
                 parts = message.split(";")
                 if len(parts) >= 3:
                     server_name = parts[1]
                     tcp_port = int(parts[2])
                     servers.append((server_name, addr[0], tcp_port))
-                    print(
-                        f"Получен ответ от {addr[0]}: {server_name} (TCP порт: {tcp_port})"
-                    )
+                    print(f"✅ Найден сервер: {server_name} ({addr[0]}:{tcp_port})")
         except socket.timeout:
             break
-        if time.time() - start_time > timeout:
-            break
+        except Exception as e:
+            print(f"🚨 Ошибка при получении данных: {e}")
+
+    udp_socket.close()
     return servers
 
 
 def tcp_client(server_ip, tcp_port):
-    """Подключение по TCP к выбранному серверу и обмен сообщениями (эхо-режим)"""
+    """Подключение по TCP к выбранному серверу"""
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
+        client_socket.settimeout(5)
         client_socket.connect((server_ip, tcp_port))
-        print(f"[TCP] Подключено к серверу {server_ip}:{tcp_port}")
-    except Exception as e:
-        print(f"[TCP] Ошибка подключения: {e}")
-        return
+        print(f"🟢 Успешное подключение к {server_ip}:{tcp_port}")
+        print("Введите сообщение (или 'exit' для выхода):")
 
-    try:
         while True:
-            message = input("Введите сообщение (или 'exit' для выхода): ")
+            message = input("> ")
             if message.lower() == "exit":
                 break
-            client_socket.sendall(message.encode("utf-8"))
-            data = client_socket.recv(1024)
-            if not data:
-                print("Сервер разорвал соединение.")
-                break
-            print("Ответ сервера:", data.decode("utf-8"))
+
+            try:
+                client_socket.sendall(message.encode("utf-8"))
+                data = client_socket.recv(1024)
+                print(f"🔷 Ответ сервера: {data.decode('utf-8')}")
+            except socket.timeout:
+                print("Таймаут ожидания ответа")
+
     except Exception as e:
-        print(f"[TCP] Ошибка во время обмена: {e}")
+        print(f"🔴 Ошибка подключения: {e}")
     finally:
         client_socket.close()
-        print("[TCP] Соединение закрыто.")
+        print("🔌 Соединение закрыто")
 
 
 if __name__ == "__main__":
-    print("Поиск серверов в локальной сети...")
+    print("🕵️‍♂️ Поиск серверов в локальной сети...")
     servers = discover_servers()
+
     if not servers:
-        print("Серверы не найдены.")
+        print("❌ Серверы не найдены")
         exit(0)
-    print("\nНайдены серверы:")
+
+    print("\nНайденные серверы:")
     for idx, (name, ip, port) in enumerate(servers):
         print(f"{idx}: {name} ({ip}:{port})")
 
     try:
-        choice = int(input("Выберите номер сервера для подключения: "))
-        if choice < 0 or choice >= len(servers):
-            raise ValueError
+        choice = int(input("Выберите номер сервера: "))
+        if 0 <= choice < len(servers):
+            selected = servers[choice]
+            tcp_client(selected[1], selected[2])
+        else:
+            print("⚠️ Неверный выбор")
     except ValueError:
-        print("Неверный выбор.")
-        exit(0)
-
-    selected_server = servers[choice]
-    tcp_client(selected_server[1], selected_server[2])
+        print("⚠️ Введите число")
