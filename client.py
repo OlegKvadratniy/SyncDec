@@ -1,37 +1,33 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Клиентская часть для создания сетевого соединения между устройствами в одной Wi-Fi сети.
+Клиент подключается к серверу, отправляет сообщения и получает от него ответ.
+"""
+
 import socket
 
+# Настройки клиента
+SERVER_IP = "192.168.1.8"  # Замените на IP-адрес сервера
+PORT = 12345  # Должен совпадать с портом сервера
 
-def start_client(server_ip, port):
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        client_socket.connect((server_ip, port))
-        print(f"Подключение к серверу {server_ip}:{port}")
-    except ConnectionRefusedError:
-        print(
-            "Ошибка: Подключение не установлено, так как конечный компьютер отверг запрос на подключение."
-        )
-        return
-    except Exception as e:
-        print(f"Произошла ошибка при подключении: {e}")
-        return
+# Создание TCP сокета
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    try:
-        while True:
-            message = input("Введите сообщение для сервера: ")
-            if message.lower() == "exit":
-                print("Отключение от сервера.")
-                break
-            client_socket.sendall(message.encode())
-            data = client_socket.recv(1024)
-            print(f"Получено от сервера: {data.decode()}")
-    except Exception as e:
-        print(f"Ошибка при общении с сервером: {e}")
-    finally:
-        client_socket.close()
-        print("Соединение закрыто.")
+# Подключение к серверу
+client_socket.connect((SERVER_IP, PORT))
+print("Подключено к серверу:", SERVER_IP)
 
-
-if __name__ == "__main__":
-    SERVER_IP = "127.0.0.1"  # IP-адрес сервера
-    PORT = 65433  # Порт
-    start_client(SERVER_IP, PORT)
+try:
+    while True:
+        message = input("Введите сообщение (или 'exit' для выхода): ")
+        if message.lower() == "exit":
+            break
+        # Отправка сообщения серверу
+        client_socket.sendall(message.encode("utf-8"))
+        # Получение ответа от сервера
+        data = client_socket.recv(1024)
+        print("Ответ сервера:", data.decode("utf-8"))
+finally:
+    client_socket.close()
+    print("Отключение от сервера.")
