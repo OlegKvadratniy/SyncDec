@@ -12,7 +12,7 @@ def get_local_ip():
             s.connect(("8.8.8.8", 80))
             return s.getsockname()[0]
     except Exception:
-        return "127.0.0.1"
+        return "127.0.0.1"  # Fallback to localhost if unable to get IP
 
 
 async def broadcast_server_info(name, port, stop_event):
@@ -25,7 +25,6 @@ async def broadcast_server_info(name, port, stop_event):
         sock.setblocking(False)
         while not stop_event.is_set():
             try:
-                # No need to bind the socket when sending broadcasts
                 sock.sendto(broadcast_message, ("<broadcast>", BROADCAST_PORT))
                 await asyncio.sleep(DISCOVERY_DELAY)
             except Exception as e:
@@ -44,7 +43,8 @@ async def handle_client(reader, writer):
                 break
             message = data.decode()
             print(f"Received from {addr}: {message}")
-            writer.write(data)  # Echo response
+            response = f"Echo: {message}"
+            writer.write(response.encode())  # Echo response with prefix
             await writer.drain()
     except ConnectionResetError:
         print(f"Client {addr} forcibly closed the connection.")
@@ -78,21 +78,23 @@ async def start_server():
     stop_event = asyncio.Event()
     broadcast_task = asyncio.create_task(broadcast_server_info(name, port, stop_event))
 
-    server = await asyncio.start_server(handle_client, "", port)
-    async with server:
-        try:
+    async def serve_clients():
+        server = await asyncio.start_server(handle_client, local_ip, port)
+        async with server:
             await server.serve_forever()
-        except KeyboardInterrupt:
-            print("Shutdown signal received. Stopping server...")
-        finally:
-            stop_event.set()
-            broadcast_task.cancel()
-            # Wait for the broadcast task to finish
-            try:
-                await broadcast_task
-            except asyncio.CancelledError:
-                pass
-            print("Server stopped.")
+
+    try:
+        await serve_clients()
+    except KeyboardInterrupt:
+        print("Shutdown signal received. Stopping server...")
+    finally:
+        stop_event.set()
+        broadcast_task.cancel()
+        try:
+            await broadcast_task
+        except asyncio.CancelledError:
+            pass
+        print("Server stopped.")
 
 
 if __name__ == "__main__":

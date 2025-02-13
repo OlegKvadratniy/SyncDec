@@ -2,14 +2,14 @@ import asyncio
 import socket
 
 BROADCAST_PORT = 65433
-DISCOVERY_TIMEOUT = 1  # Секунды для ожидания широковещательных сообщений
+DISCOVERY_TIMEOUT = 2  # Seconds for waiting for broadcast messages
 
 
 async def discover_servers():
     servers = {}
     loop = asyncio.get_running_loop()
 
-    # Создаем сокет для приема широковещательных сообщений
+    # Create a UDP socket for receiving broadcast messages
     transport, protocol = await loop.create_datagram_endpoint(
         lambda: BroadcastProtocol(servers), local_addr=("0.0.0.0", BROADCAST_PORT)
     )
@@ -39,38 +39,38 @@ class BroadcastProtocol(asyncio.DatagramProtocol):
                 self.servers[(addr[0], port)] = {"name": name, "port": port}
 
     def error_received(self, exc):
-        print(f"Ошибка в широковещательном сокете: {exc}")
+        print(f"Error in broadcast socket: {exc}")
 
     def connection_lost(self, exc):
-        pass  # Вызывается при закрытии транспорта
+        pass  # Called when the transport is closed
 
 
 def list_servers(servers):
     if not servers:
-        print("Не удалось обнаружить серверы.")
+        print("No servers discovered.")
         return
-    print("Доступные серверы:")
+    print("Available servers:")
     for idx, ((ip, port), info) in enumerate(servers.items(), start=1):
-        print(f"{idx}. {info['name']} (IP: {ip}, порт: {port})")
+        print(f"{idx}. {info['name']} (IP: {ip}, port: {port})")
 
 
 async def handle_client(reader, writer):
     addr = writer.get_extra_info("peername")
     try:
         while True:
-            message = input("Введите сообщение для отправки (или 'exit' для выхода): ")
+            message = input("Enter message to send (or 'exit' to quit): ")
             if message.lower() == "exit":
-                print("Отключение от сервера.")
+                print("Disconnecting from server.")
                 break
             writer.write(message.encode())
             await writer.drain()
             data = await reader.read(1024)
             if not data:
-                print("Соединение закрыто сервером.")
+                print("Connection closed by server.")
                 break
-            print(f"Получено от сервера: {data.decode()}")
+            print(f"Received from server: {data.decode()}")
     except Exception as e:
-        print(f"Произошла ошибка: {e}")
+        print(f"An error occurred: {e}")
     finally:
         writer.close()
         await writer.wait_closed()
@@ -82,28 +82,28 @@ async def start_client():
     if not servers:
         return
     try:
-        choice = int(input("Введите номер сервера для подключения: "))
+        choice = int(input("Enter the number of the server to connect to: "))
         if choice < 1 or choice > len(servers):
-            print("Недопустимый выбор.")
+            print("Invalid choice.")
             return
     except ValueError:
-        print("Пожалуйста, введите число.")
+        print("Please enter a number.")
         return
 
     selected_server = list(servers.items())[choice - 1]
     (server_ip, server_port) = selected_server[0]
     server_info = selected_server[1]
     server_name = server_info["name"]
-    print(f"Подключение к серверу '{server_name}' на {server_ip}:{server_port}")
+    print(f"Connecting to server '{server_name}' at {server_ip}:{server_port}")
 
     try:
         reader, writer = await asyncio.open_connection(server_ip, server_port)
-        print(f"Подключен к серверу '{server_name}' на {server_ip}:{server_port}")
+        print(f"Connected to server '{server_name}' at {server_ip}:{server_port}")
         await handle_client(reader, writer)
     except ConnectionRefusedError:
-        print("Не удалось подключиться к серверу. Проверьте IP-адрес и порт.")
+        print("Connection refused. Check the IP address and port.")
     except Exception as e:
-        print(f"Произошла ошибка: {e}")
+        print(f"An error occurred: {e}")
 
 
 if __name__ == "__main__":
