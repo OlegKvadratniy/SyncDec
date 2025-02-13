@@ -24,6 +24,6 @@ def start_server(host, port):
 
 
 if __name__ == "__main__":
-    HOST = "127.0.0.1"  # Локальный IP-адрес
+    HOST = "0.0.0.0"  # Локальный IP-адрес
     PORT = 65432  # Порт
     start_server(HOST, PORT)
