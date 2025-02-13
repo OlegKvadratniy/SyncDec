@@ -3,8 +3,17 @@ import socket
 
 def start_client(server_ip, port):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((server_ip, port))
-    print(f"Подключение к серверу {server_ip}:{port}")
+    try:
+        client_socket.connect((server_ip, port))
+        print(f"Подключение к серверу {server_ip}:{port}")
+    except ConnectionRefusedError:
+        print(
+            "Ошибка: Подключение не установлено, так как конечный компьютер отверг запрос на подключение."
+        )
+        return
+    except Exception as e:
+        print(f"Произошла ошибка при подключении: {e}")
+        return
 
     while True:
         message = input("Введите сообщение для сервера: ")
