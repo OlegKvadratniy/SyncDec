@@ -49,6 +49,8 @@ def start_client():
     print("Поиск серверов...")
 
     try:
+        print("Отправляю UDP-запрос...")
+        udp_socket.sendto(b"DISCOVERY", ("<broadcast>", udp_port))
         data, addr = udp_socket.recvfrom(1024)
         server_ip = addr[0]
         server_name = data.decode()
