@@ -48,27 +48,35 @@ def handle_client(client_socket, addr):
         curses.curs_set(0)  # Скрыть реальный курсор
         stdscr.nodelay(1)  # Неблокирующий ввод
         stdscr.timeout(100)  # Таймаут для обновления
+        # Включаем обработку событий мыши
+        curses.mousemask(curses.ALL_MOUSE_EVENTS)
 
         # Положение курсора сервера
         server_cursor = [5, 5]
 
         while True:
             try:
-                # Обработка ввода с клавиатуры
-                try:
-                    key = stdscr.getch()
-                    if key == curses.KEY_LEFT:
-                        server_cursor[1] -= 1
-                    elif key == curses.KEY_RIGHT:
-                        server_cursor[1] += 1
-                    elif key == curses.KEY_UP:
-                        server_cursor[0] -= 1
-                    elif key == curses.KEY_DOWN:
-                        server_cursor[0] += 1
-                    elif key == ord("q"):
-                        break
-                except:
-                    pass
+                # Обработка ввода (клавиатура и мышь)
+                key = stdscr.getch()
+                if key == curses.KEY_LEFT:
+                    server_cursor[1] -= 1
+                elif key == curses.KEY_RIGHT:
+                    server_cursor[1] += 1
+                elif key == curses.KEY_UP:
+                    server_cursor[0] -= 1
+                elif key == curses.KEY_DOWN:
+                    server_cursor[0] += 1
+                elif key == ord("q"):
+                    break
+                elif key == curses.KEY_MOUSE:
+                    try:
+                        _, mx, my, _, bstate = curses.getmouse()
+                        # Если нажата левая кнопка мыши – обновляем положение курсора
+                        if bstate & curses.BUTTON1_PRESSED:
+                            server_cursor[0] = my
+                            server_cursor[1] = mx
+                    except Exception:
+                        pass
 
                 # Получение данных от клиента
                 data = client_socket.recv(1024)
@@ -78,7 +86,7 @@ def handle_client(client_socket, addr):
                         parts = message.split(";")
                         if len(parts) == 3:
                             client_cursor = [int(parts[1]), int(parts[2])]
-                            # Обновление экрана
+                            # Обновление экрана: отображаем серверный и клиентский курсоры
                             stdscr.clear()
                             stdscr.addstr(server_cursor[0], server_cursor[1], "S")
                             stdscr.addstr(client_cursor[0], client_cursor[1], "C")

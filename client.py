@@ -11,32 +11,28 @@ import socket
 import time
 import netifaces
 import curses
-import time
 
 
 def get_local_broadcasts():
     broadcasts = []
     for interface in netifaces.interfaces():
         try:
-            # Пропускаем только явно ненужные интерфейсы
-            if interface.startswith(("lo", "tun")):  # только loopback и VPN
+            # Пропускаем ненужные интерфейсы
+            if interface.startswith(("lo", "tun")):
                 continue
 
             addrs = netifaces.ifaddresses(interface).get(netifaces.AF_INET, [])
             for addr in addrs:
                 if "broadcast" in addr:
-                    # Проверяем, что интерфейс активен (имеет IP)
                     if addr.get("addr") not in ("127.0.0.1", "0.0.0.0"):
                         broadcasts.append(addr["broadcast"])
-
         except (ValueError, KeyError):
             continue
 
-    return broadcasts or ["255.255.255.255"]  # универсальный fallback
+    return broadcasts or ["255.255.255.255"]
 
 
 def discover_servers(udp_port=50000, timeout=3):
-    """Обновленная версия с автоопределением сети"""
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     udp_socket.settimeout(timeout)
@@ -44,18 +40,15 @@ def discover_servers(udp_port=50000, timeout=3):
     message = "DISCOVER_REQUEST"
     servers = []
 
-    # Получаем все актуальные broadcast-адреса
     broadcast_targets = get_local_broadcasts()
     print(f"🔎 Сканирую сети: {', '.join(broadcast_targets)}")
 
-    # Отправляем запросы на все найденные адреса
     for target in broadcast_targets:
         try:
             udp_socket.sendto(message.encode(), (target, udp_port))
         except Exception as e:
             print(f"⚠️ Ошибка отправки на {target}: {e}")
 
-    # Сбор ответов
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
@@ -75,9 +68,6 @@ def discover_servers(udp_port=50000, timeout=3):
 
     udp_socket.close()
     return servers
-
-
-import socket
 
 
 def tcp_client(server_ip, tcp_port):
@@ -114,36 +104,41 @@ def tcp_client(server_ip, tcp_port):
             except ValueError:
                 print("\033[91m⚠ Некорректный ввод! Введите число от 1 до 4.\033[0m")
 
-        # Инициализация curses
+        # Инициализация curses для клиента
         stdscr = curses.initscr()
         curses.curs_set(0)  # Скрыть реальный курсор
         stdscr.nodelay(1)  # Неблокирующий ввод
         stdscr.timeout(100)  # Таймаут для обновления
+        curses.mousemask(curses.ALL_MOUSE_EVENTS)
 
         # Положение курсора клиента
         client_cursor = [0, 0]
 
-        # Основной цикл отправки сообщений и обновления курсора
         print("\nВведите сообщение (или 'exit' для выхода):")
         while True:
             try:
-                # Обработка ввода
-                try:
-                    key = stdscr.getch()
-                    if key == curses.KEY_LEFT:
-                        client_cursor[1] -= 1
-                    elif key == curses.KEY_RIGHT:
-                        client_cursor[1] += 1
-                    elif key == curses.KEY_UP:
-                        client_cursor[0] -= 1
-                    elif key == curses.KEY_DOWN:
-                        client_cursor[0] += 1
-                    elif key == ord("q"):
-                        break
-                except:
-                    pass
+                # Обработка ввода с клавиатуры и мыши
+                key = stdscr.getch()
+                if key == curses.KEY_LEFT:
+                    client_cursor[1] -= 1
+                elif key == curses.KEY_RIGHT:
+                    client_cursor[1] += 1
+                elif key == curses.KEY_UP:
+                    client_cursor[0] -= 1
+                elif key == curses.KEY_DOWN:
+                    client_cursor[0] += 1
+                elif key == ord("q"):
+                    break
+                elif key == curses.KEY_MOUSE:
+                    try:
+                        _, mx, my, _, bstate = curses.getmouse()
+                        if bstate & curses.BUTTON1_PRESSED:
+                            client_cursor[0] = my
+                            client_cursor[1] = mx
+                    except Exception:
+                        pass
 
-                # Отправка сообщения
+                # Считывание текстового сообщения (это можно заменить на curses-методы, если нужно)
                 message = input("\033[94m> \033[0m")
                 if message.lower() == "exit":
                     break
@@ -160,7 +155,6 @@ def tcp_client(server_ip, tcp_port):
                         parts = response.split(";")
                         if len(parts) == 3:
                             server_cursor = [int(parts[1]), int(parts[2])]
-                            # Обновление экрана
                             stdscr.clear()
                             stdscr.addstr(server_cursor[0], server_cursor[1], "S")
                             stdscr.addstr(client_cursor[0], client_cursor[1], "C")
@@ -168,7 +162,6 @@ def tcp_client(server_ip, tcp_port):
 
             except socket.timeout:
                 print("\033[33mТаймаут ответа сервера\033[0m")
-
             except Exception as send_error:
                 print(f"\033[91mОшибка отправки: {send_error}\033[0m")
                 break
