@@ -15,7 +15,6 @@ import netifaces
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
-UNDERLINE = "\033[4m"
 
 # Цвета текста
 RED = "\033[31m"
@@ -98,8 +97,35 @@ def tcp_client(server_ip, tcp_port):
         client_socket.settimeout(5)
         client_socket.connect((server_ip, tcp_port))
         print(f"{GREEN}🟢 Успешное подключение к {server_ip}:{tcp_port}{RESET}")
-        print(f"{BLUE}Введите сообщение (или 'exit' для выхода):{RESET}")
 
+        # Определение расположения сервера
+        valid_sides = {1: "спереди", 2: "сзади", 3: "слева", 4: "справа"}
+        print("\nОпределите расположение сервера:")
+        for key, value in valid_sides.items():
+            print(f"{key}. {value.capitalize()}")
+
+        while True:
+            try:
+                choice = int(
+                    input(
+                        "Выберите сторону [1.Спереди/2.Сзади/3.Слева/4.Справа]: "
+                    ).strip()
+                )
+                if choice in valid_sides:
+                    side = valid_sides[choice]
+                    print(
+                        f"\033[93m\u25AA Расположение сервера: {side.capitalize()}\033[0m"
+                    )
+                    client_socket.sendall(f"SERVER_SIDE;{side}".encode("utf-8"))
+                    break
+                else:
+                    print(
+                        "\033[91m⚠ Некорректный ввод! Используйте варианты из списка.\033[0m"
+                    )
+            except ValueError:
+                print("\033[91m⚠ Некорректный ввод! Введите число от 1 до 4.\033[0m")
+
+        print(f"{BLUE}Введите сообщение (или 'exit' для выхода):{RESET}")
         while True:
             message = input(f"{MAGENTA}{BOLD}> {RESET}")
             if message.lower() == "exit":

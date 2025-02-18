@@ -31,6 +31,9 @@ def handle_client(client_socket, addr):
     """Обработка подключения по TCP (обмен сообщениями и информацией о курсоре)"""
     print(f"{GREEN}[TCP] Клиент {addr} подключился.{RESET}")
     try:
+        # Отображаем информацию до использования curses
+        print(f"{CYAN}[INFO] Запуск curses для клиента {addr}.{RESET}")
+
         # Инициализация curses для сервера
         stdscr = curses.initscr()
         curses.curs_set(0)  # Скрыть реальный курсор
@@ -39,6 +42,7 @@ def handle_client(client_socket, addr):
 
         # Положение курсора сервера
         server_cursor = [5, 5]
+        server_side = "не указано"
 
         while True:
             # Обработка ввода с клавиатуры
@@ -78,6 +82,14 @@ def handle_client(client_socket, addr):
                     cursor_info = f"CURSOR;{server_cursor[0]};{server_cursor[1]}"
                     client_socket.sendall(cursor_info.encode("utf-8"))
 
+                elif message.startswith("SERVER_SIDE;"):
+                    parts = message.split(";")
+                    if len(parts) == 2:
+                        server_side = parts[1]
+                        print(
+                            f"{MAGENTA}[INFO] Клиент указал сторону сервера: {server_side}{RESET}"
+                        )
+
                 else:
                     # Эхо-ответ для других сообщений
                     client_socket.sendall(f"Сервер получил: {message}".encode("utf-8"))
@@ -91,6 +103,8 @@ def handle_client(client_socket, addr):
     finally:
         client_socket.close()
         curses.endwin()
+        # Отображаем информацию после использования curses
+        print(f"{YELLOW}[INFO] Завершение curses для клиента {addr}.{RESET}")
         print(f"{YELLOW}[TCP] Клиент {addr} отключился.{RESET}")
 
 
