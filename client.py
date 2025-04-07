@@ -156,27 +156,26 @@ def tcp_client(server_ip, tcp_port):
 
 
 def track_cursor(client_socket, side):
-    """Отслеживает курсор и отправляет события выхода за края серверу."""
+    """Отслеживает курсор и отправляет события выхода за активный край серверу."""
     screen_width, screen_height = pyautogui.size()
     while True:
         x, y = pyautogui.position()
-        if x <= 0:
-            # Курсор вышел за левый край
+        # Активный край зависит от положения сервера
+        if side == "слева" and x <= 0:  # Сервер слева → уходим влево
             client_socket.sendall(f"CURSOR_EXIT;left;{y}".encode("utf-8"))
-            pyautogui.moveTo(screen_width - 1, y)  # Перемещаем на правый край
-        elif x >= screen_width - 1:
-            # Курсор вышел за правый край
+            pyautogui.moveTo(1, y)  # Оставляем курсор у края, чтобы не ушёл дальше
+        elif (
+            side == "справа" and x >= screen_width - 1
+        ):  # Сервер справа → уходим вправо
             client_socket.sendall(f"CURSOR_EXIT;right;{y}".encode("utf-8"))
-            pyautogui.moveTo(0, y)  # Перемещаем на левый край
-        elif y <= 0:
-            # Курсор вышел за верхний край
+            pyautogui.moveTo(screen_width - 2, y)
+        elif side == "спереди" and y <= 0:  # Сервер спереди → уходим вверх
             client_socket.sendall(f"CURSOR_EXIT;top;{x}".encode("utf-8"))
-            pyautogui.moveTo(x, screen_height - 1)  # Перемещаем вниз
-        elif y >= screen_height - 1:
-            # Курсор вышел за нижний край
+            pyautogui.moveTo(x, 1)
+        elif side == "сзади" and y >= screen_height - 1:  # Сервер сзади → уходим вниз
             client_socket.sendall(f"CURSOR_EXIT;bottom;{x}".encode("utf-8"))
-            pyautogui.moveTo(x, 0)  # Перемещаем вверх
-        time.sleep(0.01)  # Задержка, чтобы не грузить процессор
+            pyautogui.moveTo(x, screen_height - 2)
+        time.sleep(0.01)
 
 
 if __name__ == "__main__":

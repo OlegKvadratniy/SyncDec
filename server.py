@@ -33,32 +33,41 @@ def handle_client(client_socket, addr):
     print(f"{GREEN}[TCP] Клиент {addr} подключился.{RESET}")
     server_side = "не указано"
     screen_width, screen_height = pyautogui.size()
+    client_connected = True
 
     def track_server_cursor():
-        """Отслеживает курсор сервера и отправляет события клиенту."""
-        while True:
-            x, y = pyautogui.position()
-            if x <= 0:
-                client_socket.sendall(f"CURSOR_EXIT;left;{y}".encode("utf-8"))
-                pyautogui.moveTo(screen_width - 1, y)
-            elif x >= screen_width - 1:
-                client_socket.sendall(f"CURSOR_EXIT;right;{y}".encode("utf-8"))
-                pyautogui.moveTo(0, y)
-            elif y <= 0:
-                client_socket.sendall(f"CURSOR_EXIT;top;{x}".encode("utf-8"))
-                pyautogui.moveTo(x, screen_height - 1)
-            elif y >= screen_height - 1:
-                client_socket.sendall(f"CURSOR_EXIT;bottom;{x}".encode("utf-8"))
-                pyautogui.moveTo(x, 0)
-            time.sleep(0.01)
+        """Отслеживает курсор сервера и отправляет события клиенту только для активного края."""
+        nonlocal client_connected
+        while client_connected:
+            try:
+                x, y = pyautogui.position()
+                # Активный край зависит от положения клиента (обратно server_side)
+                if (
+                    server_side == "слева" and x >= screen_width - 1
+                ):  # Клиент справа → уходим вправо
+                    client_socket.sendall(f"CURSOR_EXIT;right;{y}".encode("utf-8"))
+                    pyautogui.moveTo(screen_width - 2, y)
+                elif server_side == "справа" and x <= 0:  # Клиент слева → уходим влево
+                    client_socket.sendall(f"CURSOR_EXIT;left;{y}".encode("utf-8"))
+                    pyautogui.moveTo(1, y)
+                elif (
+                    server_side == "спереди" and y >= screen_height - 1
+                ):  # Клиент сзади → уходим вниз
+                    client_socket.sendall(f"CURSOR_EXIT;bottom;{x}".encode("utf-8"))
+                    pyautogui.moveTo(x, screen_height - 2)
+                elif server_side == "сзади" and y <= 0:  # Клиент спереди → уходим вверх
+                    client_socket.sendall(f"CURSOR_EXIT;top;{x}".encode("utf-8"))
+                    pyautogui.moveTo(x, 1)
+                time.sleep(0.01)
+            except (OSError, ConnectionError):
+                client_connected = False
+                break
 
     try:
-        # Запуск потока отслеживания курсора сервера
         cursor_thread = threading.Thread(target=track_server_cursor, daemon=True)
         cursor_thread.start()
 
         while True:
-            # Получение данных от клиента
             try:
                 data = client_socket.recv(1024)
                 if not data:
@@ -70,19 +79,19 @@ def handle_client(client_socket, addr):
                     if len(parts) == 3:
                         direction = parts[1]
                         coord = int(parts[2])
-                        # Двигаем курсор в зависимости от стороны сервера
-                        if server_side == "слева" and direction == "right":
-                            pyautogui.moveTo(0, coord)  # Появляется слева
-                        elif server_side == "справа" and direction == "left":
+                        # Перенос курсора с клиента на сервер
+                        if server_side == "слева" and direction == "left":
                             pyautogui.moveTo(
                                 screen_width - 1, coord
                             )  # Появляется справа
-                        elif server_side == "спереди" and direction == "bottom":
-                            pyautogui.moveTo(coord, 0)  # Появляется сверху
-                        elif server_side == "сзади" and direction == "top":
+                        elif server_side == "справа" and direction == "right":
+                            pyautogui.moveTo(0, coord)  # Появляется слева
+                        elif server_side == "спереди" and direction == "top":
                             pyautogui.moveTo(
                                 coord, screen_height - 1
                             )  # Появляется снизу
+                        elif server_side == "сзади" and direction == "bottom":
+                            pyautogui.moveTo(coord, 0)  # Появляется сверху
 
                 elif message.startswith("SERVER_SIDE;"):
                     parts = message.split(";")
@@ -93,7 +102,6 @@ def handle_client(client_socket, addr):
                         )
 
                 else:
-                    # Эхо-ответ для других сообщений
                     client_socket.sendall(f"Сервер получил: {message}".encode("utf-8"))
 
             except Exception as e:
@@ -103,6 +111,7 @@ def handle_client(client_socket, addr):
     except Exception as e:
         print(f"{RED}[TCP] Ошибка с клиентом {addr}: {e}{RESET}")
     finally:
+        client_connected = False
         client_socket.close()
         print(f"{YELLOW}[TCP] Клиент {addr} отключился.{RESET}")
 
