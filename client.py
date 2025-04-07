@@ -10,6 +10,9 @@
 import socket
 import time
 import netifaces
+import threading
+import pyautogui
+import time
 
 # Цветовые коды ANSI для красивых надписей
 RESET = "\033[0m"
@@ -114,7 +117,7 @@ def tcp_client(server_ip, tcp_port):
                 if choice in valid_sides:
                     side = valid_sides[choice]
                     print(
-                        f"\033[93m\u25AA Расположение сервера: {side.capitalize()}\033[0m"
+                        f"\033[93m\u25aa Расположение сервера: {side.capitalize()}\033[0m"
                     )
                     client_socket.sendall(f"SERVER_SIDE;{side}".encode("utf-8"))
                     break
@@ -124,6 +127,12 @@ def tcp_client(server_ip, tcp_port):
                     )
             except ValueError:
                 print("\033[91m⚠ Некорректный ввод! Введите число от 1 до 4.\033[0m")
+
+        # Запуск потока отслеживания курсора
+        cursor_thread = threading.Thread(
+            target=track_cursor, args=(client_socket, side), daemon=True
+        )
+        cursor_thread.start()
 
         print(f"{BLUE}Введите сообщение (или 'exit' для выхода):{RESET}")
         while True:
@@ -144,6 +153,30 @@ def tcp_client(server_ip, tcp_port):
     finally:
         client_socket.close()
         print(f"{YELLOW}🔌 Соединение закрыто{RESET}")
+
+
+def track_cursor(client_socket, side):
+    """Отслеживает курсор и отправляет события выхода за края серверу."""
+    screen_width, screen_height = pyautogui.size()
+    while True:
+        x, y = pyautogui.position()
+        if x <= 0:
+            # Курсор вышел за левый край
+            client_socket.sendall(f"CURSOR_EXIT;left;{y}".encode("utf-8"))
+            pyautogui.moveTo(screen_width - 1, y)  # Перемещаем на правый край
+        elif x >= screen_width - 1:
+            # Курсор вышел за правый край
+            client_socket.sendall(f"CURSOR_EXIT;right;{y}".encode("utf-8"))
+            pyautogui.moveTo(0, y)  # Перемещаем на левый край
+        elif y <= 0:
+            # Курсор вышел за верхний край
+            client_socket.sendall(f"CURSOR_EXIT;top;{x}".encode("utf-8"))
+            pyautogui.moveTo(x, screen_height - 1)  # Перемещаем вниз
+        elif y >= screen_height - 1:
+            # Курсор вышел за нижний край
+            client_socket.sendall(f"CURSOR_EXIT;bottom;{x}".encode("utf-8"))
+            pyautogui.moveTo(x, 0)  # Перемещаем вверх
+        time.sleep(0.01)  # Задержка, чтобы не грузить процессор
 
 
 if __name__ == "__main__":

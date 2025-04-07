@@ -11,6 +11,7 @@ import socket
 import threading
 import sys
 import curses
+import pyautogui
 import time
 
 # Цветовые коды ANSI для красивых надписей
@@ -30,37 +31,33 @@ MAGENTA = "\033[35m"
 def handle_client(client_socket, addr):
     """Обработка подключения по TCP (обмен сообщениями и информацией о курсоре)"""
     print(f"{GREEN}[TCP] Клиент {addr} подключился.{RESET}")
+    server_side = "не указано"
+    screen_width, screen_height = pyautogui.size()
+
+    def track_server_cursor():
+        """Отслеживает курсор сервера и отправляет события клиенту."""
+        while True:
+            x, y = pyautogui.position()
+            if x <= 0:
+                client_socket.sendall(f"CURSOR_EXIT;left;{y}".encode("utf-8"))
+                pyautogui.moveTo(screen_width - 1, y)
+            elif x >= screen_width - 1:
+                client_socket.sendall(f"CURSOR_EXIT;right;{y}".encode("utf-8"))
+                pyautogui.moveTo(0, y)
+            elif y <= 0:
+                client_socket.sendall(f"CURSOR_EXIT;top;{x}".encode("utf-8"))
+                pyautogui.moveTo(x, screen_height - 1)
+            elif y >= screen_height - 1:
+                client_socket.sendall(f"CURSOR_EXIT;bottom;{x}".encode("utf-8"))
+                pyautogui.moveTo(x, 0)
+            time.sleep(0.01)
+
     try:
-        # Отображаем информацию до использования curses
-        print(f"{CYAN}[INFO] Запуск curses для клиента {addr}.{RESET}")
-
-        # Инициализация curses для сервера
-        stdscr = curses.initscr()
-        curses.curs_set(0)  # Скрыть реальный курсор
-        stdscr.nodelay(1)  # Неблокирующий ввод
-        stdscr.timeout(100)  # Таймаут для обновления
-
-        # Положение курсора сервера
-        server_cursor = [5, 5]
-        server_side = "не указано"
+        # Запуск потока отслеживания курсора сервера
+        cursor_thread = threading.Thread(target=track_server_cursor, daemon=True)
+        cursor_thread.start()
 
         while True:
-            # Обработка ввода с клавиатуры
-            try:
-                key = stdscr.getch()
-                if key == curses.KEY_LEFT:
-                    server_cursor[1] -= 1
-                elif key == curses.KEY_RIGHT:
-                    server_cursor[1] += 1
-                elif key == curses.KEY_UP:
-                    server_cursor[0] -= 1
-                elif key == curses.KEY_DOWN:
-                    server_cursor[0] += 1
-                elif key == ord("q"):
-                    break
-            except:
-                pass
-
             # Получение данных от клиента
             try:
                 data = client_socket.recv(1024)
@@ -68,19 +65,24 @@ def handle_client(client_socket, addr):
                     break
 
                 message = data.decode("utf-8")
-                if message.startswith("CURSOR;"):
+                if message.startswith("CURSOR_EXIT;"):
                     parts = message.split(";")
                     if len(parts) == 3:
-                        client_cursor = [int(parts[1]), int(parts[2])]
-                        # Обновление экрана
-                        stdscr.clear()
-                        stdscr.addstr(server_cursor[0], server_cursor[1], "S")
-                        stdscr.addstr(client_cursor[0], client_cursor[1], "C")
-                        stdscr.refresh()
-
-                    # Отправка положения курсора сервера клиенту
-                    cursor_info = f"CURSOR;{server_cursor[0]};{server_cursor[1]}"
-                    client_socket.sendall(cursor_info.encode("utf-8"))
+                        direction = parts[1]
+                        coord = int(parts[2])
+                        # Двигаем курсор в зависимости от стороны сервера
+                        if server_side == "слева" and direction == "right":
+                            pyautogui.moveTo(0, coord)  # Появляется слева
+                        elif server_side == "справа" and direction == "left":
+                            pyautogui.moveTo(
+                                screen_width - 1, coord
+                            )  # Появляется справа
+                        elif server_side == "спереди" and direction == "bottom":
+                            pyautogui.moveTo(coord, 0)  # Появляется сверху
+                        elif server_side == "сзади" and direction == "top":
+                            pyautogui.moveTo(
+                                coord, screen_height - 1
+                            )  # Появляется снизу
 
                 elif message.startswith("SERVER_SIDE;"):
                     parts = message.split(";")
@@ -102,9 +104,6 @@ def handle_client(client_socket, addr):
         print(f"{RED}[TCP] Ошибка с клиентом {addr}: {e}{RESET}")
     finally:
         client_socket.close()
-        curses.endwin()
-        # Отображаем информацию после использования curses
-        print(f"{YELLOW}[INFO] Завершение curses для клиента {addr}.{RESET}")
         print(f"{YELLOW}[TCP] Клиент {addr} отключился.{RESET}")
 
 
